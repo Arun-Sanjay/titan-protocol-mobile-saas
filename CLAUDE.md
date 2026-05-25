@@ -227,7 +227,7 @@ eas submit --platform android --profile production
 
 | Milestone | Scope | Status | Notes |
 |---|---|---|---|
-| **M1** | Foundations — Expo + design + nav + auth | ⚪ not started | |
+| **M1** | Foundations — Expo + design + nav + auth | ✅ done (2026-05-25) | tsc + Metro boot verified; emulator cold-start pending a device |
 | **M2** | Hybrid data layer + Realtime + first-run pull | ⚪ not started | |
 | **M3** | 26 services + 25 hooks | ⚪ not started | |
 | **M4** | Core screens — Dashboard, engines, tasks, habits | ⚪ not started | |
