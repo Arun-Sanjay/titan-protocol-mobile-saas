@@ -2,6 +2,8 @@ import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts } from "../../src/theme";
+import { useAuthStore } from "../../src/stores/useAuthStore";
+import { FirstRunPullGate } from "../../src/components/FirstRunPullGate";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -10,25 +12,32 @@ function TabIcon({ name, color }: { name: IoniconName; color: string }) {
 }
 
 export default function TabsLayout() {
+  const userId = useAuthStore((s) => s.user?.id);
+  // Defensive: the root layout already redirects unauthenticated users
+  // to /(auth)/login. If we somehow render without a userId, render
+  // nothing instead of crashing FirstRunPullGate.
+  if (!userId) return null;
+
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.bg,
-          borderTopColor: "rgba(255,255,255,0.06)",
-          borderTopWidth: 1,
-        },
-        tabBarActiveTintColor: colors.text,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: {
-          ...fonts.kicker,
-          fontSize: 9,
-          letterSpacing: 1.5,
-          marginBottom: 2,
-        },
-      }}
-    >
+    <FirstRunPullGate userId={userId}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: {
+            backgroundColor: colors.bg,
+            borderTopColor: "rgba(255,255,255,0.06)",
+            borderTopWidth: 1,
+          },
+          tabBarActiveTintColor: colors.text,
+          tabBarInactiveTintColor: colors.textMuted,
+          tabBarLabelStyle: {
+            ...fonts.kicker,
+            fontSize: 9,
+            letterSpacing: 1.5,
+            marginBottom: 2,
+          },
+        }}
+      >
       <Tabs.Screen
         name="index"
         options={{
@@ -72,6 +81,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-    </Tabs>
+      </Tabs>
+    </FirstRunPullGate>
   );
 }

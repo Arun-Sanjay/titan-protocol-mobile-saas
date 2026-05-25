@@ -1,5 +1,5 @@
 import "react-native-url-polyfill/auto";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -15,6 +15,9 @@ import {
 
 import { queryClient } from "../src/lib/query-client";
 import { useAuthStore } from "../src/stores/useAuthStore";
+import { runMigrations } from "../src/db/sqlite/migrator";
+import { RealtimeProvider } from "../src/components/RealtimeProvider";
+import { logError } from "../src/lib/error-log";
 import { colors } from "../src/theme";
 
 /**
@@ -33,6 +36,8 @@ export default function RootLayout() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const user = useAuthStore((s) => s.user);
 
+  const [dbReady, setDbReady] = useState(false);
+
   const segments = useSegments();
   const router = useRouter();
 
@@ -41,16 +46,24 @@ export default function RootLayout() {
   }, [initialize]);
 
   useEffect(() => {
-    if (!fontsLoaded || isLoading) return;
+    runMigrations()
+      .then(() => setDbReady(true))
+      .catch((err) => {
+        logError("rootLayout.runMigrations", err);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!fontsLoaded || isLoading || !dbReady) return;
     const inAuthGroup = segments[0] === "(auth)";
     if (user && inAuthGroup) {
       router.replace("/(tabs)");
     } else if (!user && !inAuthGroup) {
       router.replace("/(auth)/login");
     }
-  }, [fontsLoaded, isLoading, user, segments, router]);
+  }, [fontsLoaded, isLoading, dbReady, user, segments, router]);
 
-  if (!fontsLoaded || isLoading) {
+  if (!fontsLoaded || isLoading || !dbReady) {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
   }
 
@@ -58,16 +71,18 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.bg },
-            }}
-          >
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="+not-found" />
-          </Stack>
+          <RealtimeProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.bg },
+              }}
+            >
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+          </RealtimeProvider>
           <StatusBar style="light" />
         </QueryClientProvider>
       </SafeAreaProvider>

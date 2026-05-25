@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 import { logError } from "../lib/error-log";
 import { queryClient } from "../lib/query-client";
+import { wipeAllSyncedTables } from "../sync/first-run-pull";
 import type { Session, User } from "@supabase/supabase-js";
 
 type AuthState = {
@@ -25,23 +26,21 @@ type AuthState = {
  *
  * supabase-js emits `SIGNED_OUT` on a bunch of failure modes that aren't
  * "the user actually signed out" — the most common being a 429 on the
- * /token refresh endpoint. Classic carried a recovery path; SaaS mobile
- * inherits it verbatim because the hybrid data layer (M2+) will fire
- * bursts of cloudUpsert writes that tickle the same refresh cascades.
+ * /token refresh endpoint. The hybrid data layer can fire bursts of
+ * cloudUpsert writes that tickle the same refresh cascades.
  *
  * Recovery: if we get SIGNED_OUT but still hold a refresh_token in
  * memory, try `setSession` ONCE to re-validate. On success, keep the
  * user. On failure, accept the sign-out as real and route to login.
  *
- * ─── M1 scope ───────────────────────────────────────────────────────────────
+ * ─── Sign-out ───────────────────────────────────────────────────────────────
  *
- * Classic's store also dynamic-imports `services/profile` (to ensure a
- * profile row exists post-sign-in) and `useOnboardingStore` (to clear
- * onboarding flags on sign-out). Neither exists in M1; both will be
- * wired in later milestones:
- *   - profile ensure → M3 (services + hooks)
- *   - onboarding clear → M5 (secondary screens incl. onboarding wizard)
- *   - wipeAllSyncedTables() before signOut → M2 (data layer)
+ * `signOut` wipes local SQLite (every synced table) BEFORE calling
+ * `supabase.auth.signOut`. The wipe-first ordering matters: if the cloud
+ * call fails we still don't want the next user on this device to see the
+ * previous user's cached rows. Onboarding-store clearing (Classic's
+ * dynamic import of `useOnboardingStore`) lands in M5; services/profile
+ * ensure-row lands in M3.
  */
 
 let explicitSignOut = false;
@@ -108,6 +107,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     explicitSignOut = true;
+    // Wipe the local cache BEFORE the cloud sign-out. If the network
+    // call fails we still don't want the next account on this device
+    // to see the previous user's rows.
+    try {
+      await wipeAllSyncedTables();
+    } catch (e) {
+      logError("useAuthStore.signOut.wipe", e);
+    }
     try {
       await supabase.auth.signOut();
     } catch (e) {
