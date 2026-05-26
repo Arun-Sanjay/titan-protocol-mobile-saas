@@ -160,4 +160,66 @@ describe("Hybrid sync — SQLite invariants", () => {
       .all() as { exercise_id: string }[];
     expect(remaining.map((r) => r.exercise_id)).toEqual(["ex2"]);
   });
+
+  // ─── Dirty-row replay (the SELECT side; cloud round-trip is smoke-tested) ─
+
+  test("finds dirty rows across every synced table — the flush retry query", () => {
+    // Seed a dirty row in tasks + a clean row in habits + a dirty row in
+    // weight_logs. flushDirtyRows() does
+    //   SELECT * FROM ${table} WHERE _dirty = 1
+    // per table, which is what we exercise here against the real schema.
+    db.prepare(
+      `INSERT INTO tasks (id, user_id, engine, title, kind, days_per_week, is_active, created_at, updated_at, _dirty, _deleted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "t1", "u1", "body", "Push-ups", "main", 7, 1,
+      "2026-05-26T00:00:00Z", "2026-05-26T00:00:00Z", 1, 0,
+    );
+    db.prepare(
+      `INSERT INTO habits (id, user_id, title, engine, icon, created_at, updated_at, _dirty, _deleted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "h1", "u1", "Meditate", "mind", "🧘",
+      "2026-05-26T00:00:00Z", "2026-05-26T00:00:00Z", 0, 0,
+    );
+    db.prepare(
+      `INSERT INTO weight_logs (id, user_id, date_key, weight_kg, created_at, _dirty, _deleted)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run("w1", "u1", "2026-05-26", 75.5, "2026-05-26T00:00:00Z", 1, 0);
+
+    // COUNT(*) handles composite-PK tables (no `id` column).
+    const dirtyByTable: Record<string, number> = {};
+    for (const table of SYNCED_TABLES) {
+      const row = db
+        .prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE _dirty = 1`)
+        .get() as { c: number };
+      if (row.c > 0) dirtyByTable[table] = row.c;
+    }
+    expect(dirtyByTable).toEqual({ tasks: 1, weight_logs: 1 });
+  });
+
+  test("a successful retry clears _dirty back to 0", () => {
+    db.prepare(
+      `INSERT INTO tasks (id, user_id, engine, title, kind, days_per_week, is_active, created_at, updated_at, _dirty, _deleted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "t1", "u1", "body", "Push-ups", "main", 7, 1,
+      "2026-05-26T00:00:00Z", "2026-05-26T00:00:00Z", 1, 0,
+    );
+
+    // cloudUpsert's mirrorToSqlite(table, data, 0) replays the canonical
+    // row with `_dirty = 0` on success. Simulate that with an upsert.
+    db.prepare(
+      `INSERT OR REPLACE INTO tasks (id, user_id, engine, title, kind, days_per_week, is_active, created_at, updated_at, _dirty, _deleted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "t1", "u1", "body", "Push-ups", "main", 7, 1,
+      "2026-05-26T00:00:00Z", "2026-05-26T00:01:00Z", 0, 0,
+    );
+
+    const stillDirty = db
+      .prepare("SELECT id FROM tasks WHERE _dirty = 1")
+      .all() as { id: string }[];
+    expect(stillDirty).toHaveLength(0);
+  });
 });

@@ -115,7 +115,10 @@ export default function FocusScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (e) {
         logError("focus.complete", e);
-        Alert.alert("Save failed", "Session not logged. Will retry next sync.");
+        Alert.alert(
+          "Save failed",
+          "Session saved locally. We'll push it to the cloud automatically on next reconnect.",
+        );
       }
     },
     [createSession, engine, today],

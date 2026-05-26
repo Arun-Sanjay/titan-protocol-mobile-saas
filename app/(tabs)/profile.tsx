@@ -23,7 +23,6 @@ import { useOnboardingStore } from "../../src/stores/useOnboardingStore";
 import { useProfile } from "../../src/hooks/queries/useProfile";
 import { registerForPushNotifications, clearPushToken } from "../../src/lib/push-token";
 import { restoreFromCloud } from "../../src/sync/restore";
-import { wipeAllSyncedTables } from "../../src/sync/first-run-pull";
 import { storage } from "../../src/db/storage";
 import { logError } from "../../src/lib/error-log";
 
@@ -134,7 +133,7 @@ export default function ProfileScreen() {
   const handleForceRepull = useCallback(async () => {
     Alert.alert(
       "Force re-pull from cloud?",
-      "Wipes local cache then re-downloads everything for your account.",
+      "Re-downloads everything for your account. Your local cache is replaced atomically — a failed pull leaves the existing cache intact.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -143,12 +142,34 @@ export default function ProfileScreen() {
           onPress: async () => {
             setBusy("repull");
             try {
-              await wipeAllSyncedTables();
-              await restoreFromCloud();
-              Alert.alert("Done", "Cache rebuilt from cloud.");
+              // restoreFromCloud is atomic — it stages every row in memory,
+              // then wipes-and-inserts inside a SQLite transaction. A failure
+              // mid-flight returns { success: false } without touching the
+              // current cache. Pre-wiping defeats that safety and a flaky
+              // network would leave the user with no data.
+              const res = await restoreFromCloud();
+              if (res.success) {
+                Alert.alert(
+                  "Done",
+                  `Rebuilt cache: ${res.rowsDownloaded.toLocaleString()} rows across ${res.tablesRestored} tables.`,
+                );
+              } else {
+                logError("settings.repull.failed", res.error, {
+                  errorTable: "errorTable" in res ? res.errorTable : undefined,
+                });
+                Alert.alert(
+                  "Re-pull failed",
+                  res.error === "auth"
+                    ? "Sign in expired. Sign out and back in, then retry."
+                    : `${res.error}${"errorTable" in res && res.errorTable ? ` (table: ${res.errorTable})` : ""}. Your existing cache is intact.`,
+                );
+              }
             } catch (e) {
-              logError("settings.repull", e);
-              Alert.alert("Re-pull failed", "Check connection and retry.");
+              logError("settings.repull.exception", e);
+              Alert.alert(
+                "Re-pull failed",
+                "Unexpected error. Your existing cache is intact.",
+              );
             } finally {
               setBusy(null);
             }
