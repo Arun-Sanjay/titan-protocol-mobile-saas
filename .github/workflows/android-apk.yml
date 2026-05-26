@@ -17,10 +17,6 @@ on:
     branches: [master]
   workflow_dispatch:
 
-concurrency:
-  group: android-apk-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   # ─── Job 1: TypeScript + Jest gate ─────────────────────────────────────────
   checks:
