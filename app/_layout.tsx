@@ -15,8 +15,10 @@ import {
 
 import { queryClient } from "../src/lib/query-client";
 import { useAuthStore } from "../src/stores/useAuthStore";
+import { useOnboardingStore } from "../src/stores/useOnboardingStore";
 import { runMigrations } from "../src/db/sqlite/migrator";
 import { RealtimeProvider } from "../src/components/RealtimeProvider";
+import { setupNotificationHandler } from "../src/lib/notifications";
 import { logError } from "../src/lib/error-log";
 import { colors } from "../src/theme";
 
@@ -35,6 +37,7 @@ export default function RootLayout() {
   const initialize = useAuthStore((s) => s.initialize);
   const isLoading = useAuthStore((s) => s.isLoading);
   const user = useAuthStore((s) => s.user);
+  const onboardingComplete = useOnboardingStore((s) => s.completed);
 
   const [dbReady, setDbReady] = useState(false);
 
@@ -53,15 +56,46 @@ export default function RootLayout() {
       });
   }, []);
 
+  // Wire the notification-tap handler so a tap on a local notif lands the
+  // user on the right screen. Permission requests happen later (after
+  // first task create) — this only registers the listener.
+  useEffect(() => {
+    const subscription = setupNotificationHandler((route) => {
+      router.push(route as never);
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [router]);
+
   useEffect(() => {
     if (!fontsLoaded || isLoading || !dbReady) return;
     const inAuthGroup = segments[0] === "(auth)";
-    if (user && inAuthGroup) {
-      router.replace("/(tabs)");
-    } else if (!user && !inAuthGroup) {
-      router.replace("/(auth)/login");
+    const inOnboardingGroup = segments[0] === "(onboarding)";
+
+    if (!user) {
+      if (!inAuthGroup) router.replace("/(auth)/login");
+      return;
     }
-  }, [fontsLoaded, isLoading, dbReady, user, segments, router]);
+
+    // Authenticated. Onboarding gate sits between auth and tabs.
+    if (!onboardingComplete && !inOnboardingGroup) {
+      router.replace("/(onboarding)/step-1");
+      return;
+    }
+
+    if (onboardingComplete && (inAuthGroup || inOnboardingGroup)) {
+      router.replace("/(tabs)");
+    }
+  }, [
+    fontsLoaded,
+    isLoading,
+    dbReady,
+    user,
+    onboardingComplete,
+    segments,
+    router,
+  ]);
 
   if (!fontsLoaded || isLoading || !dbReady) {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
@@ -79,6 +113,7 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(onboarding)" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="+not-found" />
             </Stack>

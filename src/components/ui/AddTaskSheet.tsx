@@ -25,6 +25,25 @@ import { colors, fonts, radius, spacing } from "../../theme";
 import type { EngineKey } from "../../db/schema";
 import { useCreateTask } from "../../hooks/queries/useTasks";
 import { logError } from "../../lib/error-log";
+import { registerForPushNotifications } from "../../lib/push-token";
+import { storage } from "../../db/storage";
+
+const PUSH_PROMPTED_KEY = "titan.pushPromptedOnce";
+
+/**
+ * Fire-and-forget: ask for push permission after the user's first
+ * successful task create. Tracked per-device in MMKV so we ask at most
+ * once unprompted; Settings provides a manual toggle for re-asking.
+ */
+function maybeAskForPush() {
+  try {
+    if (storage.getBoolean(PUSH_PROMPTED_KEY)) return;
+    storage.set(PUSH_PROMPTED_KEY, true);
+    void registerForPushNotifications().catch(() => {});
+  } catch {
+    // Best-effort — MMKV unavailable shouldn't break the task create flow.
+  }
+}
 
 const ENGINE_OPTIONS: {
   key: EngineKey;
@@ -106,6 +125,9 @@ export function AddTaskSheet({ visible, onClose, defaultEngine }: Props) {
         days_per_week: days,
       });
       onClose();
+      // First-task-create is the right moment to ask for push permission
+      // — the user has signaled they care about staying on top of this.
+      maybeAskForPush();
     } catch (e) {
       logError("AddTaskSheet.submit", e);
       const message =
