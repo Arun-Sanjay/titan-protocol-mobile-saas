@@ -45,6 +45,7 @@ export function useProfile() {
         archetype: null,
         mode: "full_protocol",
         focus_engines: [],
+        expo_push_token: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
