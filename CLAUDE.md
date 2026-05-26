@@ -231,7 +231,7 @@ eas submit --platform android --profile production
 | **M2** | Hybrid data layer + Realtime + first-run pull | ✅ done (2026-05-26) | 18 jest tests pass; tsc clean; cross-device manual test pending an emulator + web run |
 | **M3** | 26 services + 25 hooks | ✅ done (2026-05-26) | 83 cloud-write sites, 0 sqlite-write sites in services; 68 jest tests pass; cross-device CRUD smoke pending |
 | **M4** | Core screens — Dashboard, engines, tasks, habits | ✅ done (2026-05-26) | tsc clean; 11 jest suites / 70 tests including forbidden-patterns lint; emulator visual review + perf trace pending |
-| **M5** | Secondary screens + push notifications | ⚪ not started | |
+| **M5** | Secondary screens + push notifications | ✅ done (2026-05-26) | 6 screens + onboarding wizard live; send-push Edge Function deployed; pg_cron daily streak warning scheduled at 14:30 UTC; permission prompt timed post-first-task |
 | **M6** | Ship — bundle migration, store assets, submission | ⚪ not started | |
 
 When a milestone lands:
