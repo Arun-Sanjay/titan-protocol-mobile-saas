@@ -35,31 +35,25 @@ const ROWS: readonly RowConfig[] = [
     icon: "stopwatch-outline",
     title: "Focus",
     subtitle: "Pomodoro sessions with deep work tracking.",
-    comingIn: "M5",
+    href: "/focus",
   },
   {
     icon: "book-outline",
     title: "Journal",
-    subtitle: "End-of-day reflections + mood logs.",
-    comingIn: "M5",
+    subtitle: "End-of-day reflections.",
+    href: "/journal",
   },
   {
     icon: "flag-outline",
     title: "Goals",
     subtitle: "Long-horizon targets the missions ladder up to.",
-    comingIn: "M5",
+    href: "/goals",
   },
   {
     icon: "stats-chart-outline",
     title: "Analytics",
-    subtitle: "Streaks, heatmaps, week-over-week trends.",
-    comingIn: "M5",
-  },
-  {
-    icon: "settings-outline",
-    title: "Settings",
-    subtitle: "Theme, notifications, account, dev tools.",
-    comingIn: "M5",
+    subtitle: "Week summary, engine trends, task reliability.",
+    href: "/analytics",
   },
 ];
 

@@ -3,6 +3,7 @@ import {
   newId,
   cloudDelete,
   sqliteList,
+  sqliteGet,
   cloudUpsert,
 } from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
@@ -38,4 +39,22 @@ export async function createGoal(goal: {
 
 export async function deleteGoal(goalId: string): Promise<void> {
   await cloudDelete("goals", { id: goalId });
+}
+
+/**
+ * Partial update — read-merge-write. M5 uses this from the Goals
+ * screen to toggle between "active" and "completed". Future fields
+ * (target_date, etc.) can ride the same path.
+ */
+export async function updateGoal(
+  goalId: string,
+  patch: Partial<Omit<Goal, "id" | "user_id" | "created_at">>,
+): Promise<Goal> {
+  const existing = await sqliteGet<Goal>("goals", { id: goalId });
+  if (!existing) throw new Error("Goal not found");
+  return cloudUpsert("goals", {
+    ...existing,
+    ...patch,
+    updated_at: new Date().toISOString(),
+  });
 }

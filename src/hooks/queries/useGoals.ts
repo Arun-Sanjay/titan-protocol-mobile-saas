@@ -4,6 +4,7 @@ import {
   listGoals,
   createGoal,
   deleteGoal,
+  updateGoal,
   type Goal,
 } from "../../services/goals";
 
@@ -48,6 +49,31 @@ export function useCreateGoal() {
     onMutate: async () => {
       await qc.cancelQueries({ queryKey: goalsKeys.all });
       const prev = qc.getQueryData<Goal[]>(goalsKeys.all);
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(goalsKeys.all, ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: goalsKeys.all });
+    },
+  });
+}
+
+export function useUpdateGoal() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (vars: {
+      goalId: string;
+      patch: Partial<Omit<Goal, "id" | "user_id" | "created_at">>;
+    }) => updateGoal(vars.goalId, vars.patch),
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: goalsKeys.all });
+      const prev = qc.getQueryData<Goal[]>(goalsKeys.all);
+      qc.setQueryData<Goal[]>(goalsKeys.all, (old) =>
+        old?.map((g) => (g.id === vars.goalId ? { ...g, ...vars.patch } : g)) ?? [],
+      );
       return { prev };
     },
     onError: (_err, _vars, ctx) => {
