@@ -48,13 +48,14 @@ export function subscribeUserChanges(
   const channel: RealtimeChannel = supabase.channel(`user-${userId}-changes`);
 
   for (const table of SYNCED_TABLES) {
+    const keyCol = REALTIME_KEY_COLUMN[table] ?? "user_id";
     channel.on(
       "postgres_changes" as never,
       {
         event: "*",
         schema: "public",
         table,
-        filter: `user_id=eq.${userId}`,
+        filter: `${keyCol}=eq.${userId}`,
       } as never,
       (payload: unknown) => {
         const p = payload as ChangePayload;
@@ -122,6 +123,16 @@ async function handleChange(
 }
 
 /**
+ * Per-table override for the postgres_changes filter column. Default is
+ * `user_id` (every table follows the standard FK convention). `profiles`
+ * is keyed by `id` because the row IS the auth user — adding a `user_id`
+ * filter there yields no matches and the channel comes up CHANNEL_ERROR.
+ */
+const REALTIME_KEY_COLUMN: Partial<Record<string, string>> = {
+  profiles: "id",
+};
+
+/**
  * Map a Supabase table name → the queryKey root some hooks use. Where the
  * hook uses the table name verbatim (e.g. `["weight_logs"]`), no mapping is
  * needed — the predicate match catches it directly. This map only covers
@@ -157,7 +168,8 @@ const SHORT_ROOT_FOR_TABLE: Record<string, string> = {
   skill_tree_progress: "skillTree",
   user_titles: "titles",
   titan_mode_state: "titanMode",
-  // tasks, habits, goals, journal_entries, profile, weight_logs, sleep_logs,
+  profiles: "profile",
+  // tasks, habits, goals, journal_entries, weight_logs, sleep_logs,
   // budgets, quests, completions, progression, subscriptions — these match
   // the predicate directly via the `table` literal.
 };

@@ -34,10 +34,15 @@ export async function pullIfEmpty(
     // Three representative tables: tasks (most users have at least one),
     // habits (almost always populated), profiles (single row per user on
     // first sign-in). If all three are empty for this user, we're fresh.
+    //
+    // Profiles is keyed by `id` (matches auth.users.id), not `user_id` —
+    // the other tables use the conventional `user_id` FK. Get that wrong
+    // and the whole gate throws + falls into the catch + returns
+    // `{ pulled: false }`, so the user lands on an empty dashboard.
     const [tasks, habits, profile] = await Promise.all([
       sqliteCount("tasks", { where: "user_id = ?", params: [userId] }),
       sqliteCount("habits", { where: "user_id = ?", params: [userId] }),
-      sqliteCount("profiles", { where: "user_id = ?", params: [userId] }),
+      sqliteCount("profiles", { where: "id = ?", params: [userId] }),
     ]);
 
     if (tasks + habits + profile > 0) {

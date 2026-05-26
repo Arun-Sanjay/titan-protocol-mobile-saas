@@ -47,6 +47,23 @@ function tableHasColumn(table: string, column: string): boolean {
   return Boolean(cols && column in cols);
 }
 
+/** Conditionally stamp the schema-defined timestamps. Tables vary widely —
+ *  some have both, some only one, some neither (focus_sessions, field_ops,
+ *  achievements_unlocked, etc.). Without this gate, every cloudUpsert sends
+ *  Supabase columns it doesn't recognize and the write fails. */
+function applyTimestampStamps(table: string, merged: Record<string, unknown>, nowIso: string): void {
+  if (tableHasColumn(table, "created_at")) {
+    if (merged.created_at == null) merged.created_at = nowIso;
+  } else {
+    delete merged.created_at;
+  }
+  if (tableHasColumn(table, "updated_at")) {
+    merged.updated_at = nowIso;
+  } else {
+    delete merged.updated_at;
+  }
+}
+
 function ownerColumnFor(table: string): string | null {
   if (table === "profiles") return "id";
   return tableHasColumn(table, "user_id") ? "user_id" : null;
@@ -309,8 +326,7 @@ export async function cloudUpsert<T extends Record<string, unknown>>(
 ): Promise<T> {
   const now = new Date().toISOString();
   const merged: Record<string, unknown> = { ...row };
-  if (merged.created_at == null) merged.created_at = now;
-  merged.updated_at = now;
+  applyTimestampStamps(table, merged, now);
 
   const cloudRow = toCloudRow(merged);
   const pkCols = primaryKeyFor(table);
@@ -346,8 +362,7 @@ export async function cloudUpsertMany<T extends Record<string, unknown>>(
   const now = new Date().toISOString();
   const cloudRows = rows.map((r) => {
     const merged: Record<string, unknown> = { ...r };
-    if (merged.created_at == null) merged.created_at = now;
-    merged.updated_at = now;
+    applyTimestampStamps(table, merged, now);
     return toCloudRow(merged);
   });
 

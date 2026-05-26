@@ -22,7 +22,11 @@ async function alreadyApplied(id: string): Promise<boolean> {
 }
 
 async function recordApplied(id: string): Promise<void> {
-  await run("INSERT INTO schema_migrations (id) VALUES (?)", [id]);
+  // OR IGNORE so a double-invoked migrator (StrictMode in dev / Fast Refresh
+  // / hot reload) can't race two concurrent applies into a UNIQUE constraint
+  // failure on schema_migrations.id. The `alreadyApplied` check earlier is
+  // the fast path; this is the race-safe backstop.
+  await run("INSERT OR IGNORE INTO schema_migrations (id) VALUES (?)", [id]);
 }
 
 // Apply a single migration. expo-sqlite's execAsync already runs
