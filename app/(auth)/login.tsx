@@ -6,6 +6,7 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -24,7 +25,13 @@ WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-const GOOGLE_CONFIGURED = Boolean(GOOGLE_WEB_CLIENT_ID && GOOGLE_ANDROID_CLIENT_ID);
+// Apple rejects iOS apps that offer Google / Facebook sign-in without
+// also offering Sign in with Apple. Until expo-apple-authentication lands
+// in a follow-up, suppress the Google button on iOS entirely so we don't
+// trip review. Android is fine.
+const GOOGLE_CONFIGURED =
+  Boolean(GOOGLE_WEB_CLIENT_ID && GOOGLE_ANDROID_CLIENT_ID) &&
+  Platform.OS !== "ios";
 
 /**
  * Auth entry — three paths:
