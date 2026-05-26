@@ -25,30 +25,32 @@ export function FirstRunPullGate({ userId, children }: Props) {
   const ranForRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // ranForRef guards the userId so we only kick off pullIfEmpty once per
+    // user — even under React.StrictMode's mount → unmount → remount cycle.
+    // The remount returns early because ranForRef.current === userId from
+    // the first mount, so we don't fire a second concurrent pull.
+    //
+    // Note: we DO NOT use a `cancelled` flag to gate the final setStatus.
+    // StrictMode would set cancelled=true on the cleanup between mounts;
+    // the first mount's async then completes with cancelled=true and skips
+    // setStatus, leaving the gate stuck in "checking" forever (renders
+    // null → blank screen). React 19 treats setState on an unmounted
+    // component as a no-op, so the unconditional setStatus is safe and
+    // prevents that hang.
     if (ranForRef.current === userId) return;
     ranForRef.current = userId;
-    let cancelled = false;
 
     void (async () => {
       try {
-        const { pulled } = await pullIfEmpty(userId, (p) => {
-          if (!cancelled) {
-            setStatus("syncing");
-            setProgress(p);
-          }
+        await pullIfEmpty(userId, (p) => {
+          setStatus("syncing");
+          setProgress(p);
         });
-        if (!cancelled) {
-          void pulled;
-          setStatus("ready");
-        }
       } catch {
-        if (!cancelled) setStatus("ready");
+        // fall through — setStatus below still fires
       }
+      setStatus("ready");
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [userId]);
 
   if (status === "syncing") return <PullSplash progress={progress} />;
