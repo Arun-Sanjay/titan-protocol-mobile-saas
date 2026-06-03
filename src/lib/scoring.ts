@@ -10,8 +10,7 @@
  *
  * Reads directly from the local SQLite cache via service-helpers. This is
  * the canonical model for every DISPLAYED engine/Titan score (HQ, engines,
- * engine detail, analytics, radar). The archetype-weighted scoring-v2.ts is
- * retained only for any non-display gamification that still depends on it.
+ * engine detail, analytics, radar).
  */
 
 import {
