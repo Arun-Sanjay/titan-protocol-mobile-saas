@@ -120,6 +120,16 @@ async function handleChange(
       return first === table || first === tableRoot;
     },
   });
+
+  // tasks/completions feed the derived score caches (HQ hero/radar/planner,
+  // analytics). Those query keys start with "dashboard"/"dailyPlanning"/
+  // "analytics", so the predicate above misses them — bust them explicitly
+  // so a cross-device task change refreshes this device's scores.
+  if (table === "tasks" || table === "completions") {
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    queryClient.invalidateQueries({ queryKey: ["dailyPlanning"] });
+    queryClient.invalidateQueries({ queryKey: ["analytics"] });
+  }
 }
 
 /**
