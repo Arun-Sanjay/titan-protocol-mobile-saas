@@ -130,7 +130,10 @@ export function useToggleCompletion() {
       qc.invalidateQueries({
         queryKey: tasksKeys.engineCompletions(vars.task.engine, vars.dateKey),
       });
-      // Fire-and-forget achievement check after task completion settles
+      // Per-engine task list is used by engine-detail screens that recompute
+      // their own day score from useEngineTasks + useEngineCompletions —
+      // invalidate so screens on other engines still rerender correctly.
+      qc.invalidateQueries({ queryKey: tasksKeys.engine(vars.task.engine) });
       runAchievementCheck(qc).catch(() => {});
       // Fire-and-forget skill-tree re-evaluation so level-1 "task_count"
       // nodes flip to "ready" as the user plays, not only after evening
@@ -212,6 +215,7 @@ export function useToggleCompletionWithReward() {
       qc.invalidateQueries({
         queryKey: tasksKeys.engineCompletions(vars.task.engine, vars.dateKey),
       });
+      qc.invalidateQueries({ queryKey: tasksKeys.engine(vars.task.engine) });
       qc.invalidateQueries({ queryKey: profileQueryKey });
       runAchievementCheck(qc).catch(() => {});
       evaluateAllTrees().catch(() => {});
@@ -232,8 +236,12 @@ export function useCreateTask() {
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev) qc.setQueryData(tasksKeys.all, ctx.prev);
     },
-    onSettled: () => {
+    onSettled: (_data, _err, vars) => {
       qc.invalidateQueries({ queryKey: tasksKeys.all });
+      qc.invalidateQueries({ queryKey: tasksKeys.engine(vars.engine) });
+      // Analytics' "task reliability" view derives from this map — adding
+      // a task changes the eligible-tasks denominator.
+      qc.invalidateQueries({ queryKey: tasksKeys.recentCompletions });
     },
   });
 }
@@ -264,6 +272,9 @@ export function useDeleteTask() {
       if (vars.engine) {
         qc.invalidateQueries({ queryKey: tasksKeys.engine(vars.engine) });
       }
+      // Deleted task disappears from the reliability ranking used by
+      // analytics; refresh the recent-completion map.
+      qc.invalidateQueries({ queryKey: tasksKeys.recentCompletions });
     },
   });
 }
