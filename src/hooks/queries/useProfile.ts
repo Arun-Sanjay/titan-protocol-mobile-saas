@@ -119,6 +119,22 @@ export function useSettleStreaks() {
 }
 
 /**
+ * Generic profile-update mutation. Merge-updates the cloud profile row and
+ * refreshes the profile query. Used by the trial/paywall flow to stamp
+ * `trial_started_at`. Mirrors web's `useUpdateProfile`.
+ */
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (updates: Partial<Omit<Profile, "id" | "created_at">>) =>
+      upsertProfile(updates),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: profileQueryKey });
+    },
+  });
+}
+
+/**
  * Persist a Settings mode change to the cloud profile so the next launch
  * (or a different device) reflects it. Without this hook the Settings
  * screen only updated the local Zustand mirror; the next sign-in

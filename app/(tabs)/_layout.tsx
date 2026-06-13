@@ -6,6 +6,7 @@ import { useAuthStore } from "../../src/stores/useAuthStore";
 import { CelebrationProvider } from "../../src/components/CelebrationProvider";
 import { StreakSettlementGate } from "../../src/components/StreakSettlementGate";
 import { RankUpWatcher } from "../../src/components/RankUpWatcher";
+import { AccessGate } from "../../src/components/AccessGate";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -28,6 +29,10 @@ export default function TabsLayout() {
           these mount. Mirrors web's OSLayout. */}
       <StreakSettlementGate />
       <RankUpWatcher />
+      {/* Trial invite + paywall overlay across all tabs. Renders nothing
+          while the user is Pro (trial active or subscribed). Mirrors web's
+          AccessGate mounted in OSLayout. */}
+      <AccessGate />
         <Tabs
           screenOptions={{
             headerShown: false,
