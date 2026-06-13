@@ -41,6 +41,7 @@ export function useProfile() {
         first_task_completed_at: null,
         onboarding_completed: false,
         tutorial_completed: false,
+        trial_started_at: null,
         display_name: null,
         archetype: null,
         mode: "full_protocol",
