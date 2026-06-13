@@ -187,12 +187,28 @@ export async function settleStreaks(): Promise<{ streak: number } | null> {
   const profile = await getProfile();
   const today = todayISO();
   const lastSettled = profile?.streak_last_date ?? null;
+  const yesterday = addDaysISO(today, -1);
 
-  // First day to settle: the morning after the last settled day, or the
-  // user's first use.
-  let startDay = lastSettled
-    ? addDaysISO(lastSettled, 1)
-    : profile?.first_use_date ?? null;
+  // First day to (re)settle. Normally the morning after the last settled day.
+  // BUT when the last settled day is still inside the grace window
+  // (yesterday), RE-FOLD it: if the user checks off yesterday's tasks this
+  // morning, re-scoring lets the streak recover instead of staying locked as
+  // a miss (audit §3.5). We re-derive the streak as it stood ENTERING that
+  // day from the prior day's settled ledger row.
+  let startDay: string | null;
+  let streak = profile?.streak_current ?? 0;
+  if (lastSettled && lastSettled >= yesterday) {
+    startDay = lastSettled;
+    const prevRow = await sqliteGet<XpLog>("xp_log", {
+      user_id: userId,
+      date_key: addDaysISO(lastSettled, -1),
+    });
+    streak = prevRow?.streak_value ?? 0;
+  } else {
+    startDay = lastSettled
+      ? addDaysISO(lastSettled, 1)
+      : profile?.first_use_date ?? null;
+  }
   if (!startDay) {
     // No anchor — this account's first session on the streak system.
     // Seed first_use_date (device-local today) so settlement starts
@@ -205,10 +221,9 @@ export async function settleStreaks(): Promise<{ streak: number } | null> {
     return { streak: profile?.streak_current ?? 0 };
   }
 
-  const endDay = addDaysISO(today, -1); // yesterday — today is still in progress
+  const endDay = yesterday; // today is still in progress
   if (startDay > endDay) return { streak: profile?.streak_current ?? 0 };
 
-  let streak = profile?.streak_current ?? 0;
   let best = profile?.streak_best ?? 0;
   let lastDay: string = lastSettled ?? startDay;
 

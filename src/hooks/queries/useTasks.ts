@@ -15,8 +15,6 @@ import {
   type TaskKind,
 } from "../../services/tasks";
 import { profileQueryKey } from "./useProfile";
-import { awardXpForCompletion, refundXpForUncomplete } from "../../services/xp";
-import { enqueueRankUp } from "../../services/rank-ups";
 import { xpKeys } from "./useXp";
 import { runAchievementCheck } from "../../lib/achievement-integration";
 import { evaluateAllTrees } from "../../lib/skill-tree-evaluator";
@@ -118,20 +116,12 @@ export function useToggleCompletion() {
         dateKey: vars.dateKey,
         engine: vars.task.engine,
       });
-      if (result.added) {
-        // Award XP (10/day cap + streak multiplier handled in the service).
-        // On a level-up, enqueue a rank-up event for the celebration watcher.
-        const award = await awardXpForCompletion(vars.dateKey, vars.task.id);
-        if (award.awarded && award.leveledUp) {
-          await enqueueRankUp({
-            fromLevel: award.fromLevel,
-            toLevel: award.toLevel,
-          });
-        }
-      } else {
-        // Un-completing a counted task refunds its XP (anti-gaming guarded).
-        await refundXpForUncomplete(vars.dateKey, vars.task.id);
-      }
+      // XP, level, and the rank-up celebration are awarded SERVER-SIDE by the
+      // completions INSERT/DELETE triggers: atomic (no cross-tap/-device
+      // race), 10/day cap + streak multiplier + ±1-day gate enforced in SQL,
+      // exactly once — and offline completions earn their XP when they sync.
+      // The resulting xp_log / profiles / rank_up_events rows arrive via
+      // Realtime; the onSettled invalidations below refetch them.
       return { completed: result.added };
     },
     onMutate: async (vars) => {
