@@ -176,6 +176,12 @@ export async function refundXpForUncomplete(
  * else reset to 0). Records each day's consistency on its xp_log row and
  * advances profiles.streak_current / streak_best / streak_last_date.
  */
+/** Cap on how many past days one settlement run will fold. A gap longer
+ *  than this means weeks of empty days — the streak is mathematically 0
+ *  well before the cutoff — so folding them one-by-one would only burn
+ *  time and one cloud write per idle day. */
+const SETTLE_WINDOW_DAYS = 30;
+
 export async function settleStreaks(): Promise<{ streak: number } | null> {
   const userId = await requireUserId();
   const profile = await getProfile();
@@ -183,11 +189,21 @@ export async function settleStreaks(): Promise<{ streak: number } | null> {
   const lastSettled = profile?.streak_last_date ?? null;
 
   // First day to settle: the morning after the last settled day, or the
-  // user's first use. Brand-new accounts have nothing to settle.
-  const startDay = lastSettled
+  // user's first use.
+  let startDay = lastSettled
     ? addDaysISO(lastSettled, 1)
     : profile?.first_use_date ?? null;
-  if (!startDay) return null;
+  if (!startDay) {
+    // No anchor — this account's first session on the streak system.
+    // Seed first_use_date (device-local today) so settlement starts
+    // folding from tomorrow. Nothing else writes first_use_date; without
+    // this seed settleStreaks bailed here forever and the whole
+    // streak/multiplier system never activated for any account.
+    if (profile) {
+      await upsertProfile({ first_use_date: today });
+    }
+    return { streak: profile?.streak_current ?? 0 };
+  }
 
   const endDay = addDaysISO(today, -1); // yesterday — today is still in progress
   if (startDay > endDay) return { streak: profile?.streak_current ?? 0 };
@@ -196,8 +212,17 @@ export async function settleStreaks(): Promise<{ streak: number } | null> {
   let best = profile?.streak_best ?? 0;
   let lastDay: string = lastSettled ?? startDay;
 
+  // Clamp the catch-up window: jump the cursor and reset the streak
+  // instead of folding months of dead air day by day.
+  const windowStart = addDaysISO(today, -SETTLE_WINDOW_DAYS);
+  if (startDay < windowStart) {
+    startDay = windowStart;
+    streak = 0;
+  }
+
   for (let d = startDay; d <= endDay; d = addDaysISO(d, 1)) {
     const pct = (await getTitanScoreForDate(d)).percent;
+    const streakBefore = streak;
     streak = foldStreak(streak, pct);
     if (streak > best) best = streak;
 
@@ -205,6 +230,14 @@ export async function settleStreaks(): Promise<{ streak: number } | null> {
       user_id: userId,
       date_key: d,
     });
+    // Don't mint ledger rows for dead air: a day with no existing row,
+    // no qualifying score, and a streak that was already 0 records
+    // nothing — skipping it keeps a long-absent user's catch-up to a
+    // single profile write instead of one cloud upsert per idle day.
+    if (!existing && streakBefore === 0 && streak === 0) {
+      lastDay = d;
+      continue;
+    }
     await writeXpLog(userId, d, existing, {
       consistency: pct,
       streak_value: streak,
